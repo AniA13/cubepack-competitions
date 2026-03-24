@@ -5,27 +5,45 @@
 /* Custom font */
 @font-face {
   font-family: "AcidGreen Poster";
-  src: url("/AcidGreen-Poster.ttf") format("truetype");
+  src: url("/Coolvetica-Rg.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 
 /* Palette */
+/* Acid color ranges: white, red, black (0, 25, 50, 75, 100) */
 :root {
-  --acid-bg: #0f0f0f;
-  --acid-ink: #121212;
-  --acid-pink: #ff6fb0;
-  --acid-pink-strong: #ff4aa2;
+  /* Acid White Shades */
+  --acid-white-0: #ffffff;   /* Pure white */
+  --acid-white-25: #f5f5f5; /* Very light gray */
+  --acid-white-50: #e5e5e5; /* Light gray */
+  --acid-white-75: #cccccc; /* Medium gray */
+  --acid-white-100: #b3b3b3;/* Darker gray */
+
+  /* Acid Red Shades */
+  --acid-red-0: #fff5f5;    /* Very pale red */
+  --acid-red-25: #ffb3b3;   /* Light acid red */
+  --acid-red-50: #ff2d2d;   /* Vibrant acid red */
+  --acid-red-75: #d60000;   /* Strong acid red */
+  --acid-red-100: #7a0000;  /* Deepest acid red */
+
+  /* Acid Black Shades */
+  --acid-black-0: #f5f5f5;  /* Near white (for contrast) */
+  --acid-black-25: #b3b3b3; /* Light gray-black */
+  --acid-black-50: #444444; /* Medium gray-black */
+  --acid-black-75: #1a1a1a; /* Near black */
+  --acid-black-100: #0f0f0f;/* Pure black */
+
+  /* Muted accent (optional) */
   --acid-muted: #7a5c6a;
-  --acid-card: #ffffff;
 }
 
 /* Base page styling */
 @layer base {
   body {
     font-family: "AcidGreen Poster", ui-sans-serif, system-ui, sans-serif;
-    background-color: var(--acid-bg);
+    background-color: var(--acid-black-50);
     background-image: url("/backgroundNoise.png");
     background-repeat: repeat;
     background-size: 256px 256px;
