@@ -2,6 +2,7 @@ import CompetitorDetails from "./CompetitorDetails";
 import Navbar from "../../..//components/navbar";
 import { createClient } from "@supabase/supabase-js";
 import { groupSolvesByCompetitionEventRound } from "../../../utils/groupSolves";
+import { GroupedCompetition, Placement, Podium } from "../../../types/competition";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
@@ -16,17 +17,23 @@ export default async function Page({ params }: { params: any }) {
   const id = realParams.id;
   const idNum = Number(id);
   let competitor = null;
-  let groupedSolves = [];
-  let placements = [];
-  let podiums = [];
+  let groupedSolves: GroupedCompetition[] = [];
+  let placements: Placement[] = [];
+  let podiums: Podium[] = [];
   if (!isNaN(idNum)) {
     // Fetch competitor
+    console.log('[QUERY] competitors', { idNum });
     const { data: competitorData, error: competitorError } = await supabase.from("competitors").select("*").eq("id", idNum).single();
+    console.log('[RESULT] competitors', { data: competitorData, error: competitorError });
     competitor = competitorData ?? null;
     // Fetch solves
-    const { data: solvesData } = await supabase.from("solves").select("*").eq("competitor_id", idNum);
-    // Fetch placements
-    const { data: placementsData } = await supabase.from("round_placements").select("*").eq("competitor_id", idNum);
+    console.log('[QUERY] solves', { competitor_id: idNum });
+    const { data: solvesData, error: solvesError } = await supabase.from("solves").select("*").eq("competitor_id", idNum);
+    console.log('[RESULT] solves', solvesData);
+    // Fetch placements (filtered by competitor_id)
+    console.log('[QUERY] round_placements', { competitor_id: idNum });
+    const { data: placementsData, error: placementsError } = await supabase.from("round_placements").select("*").eq("competitor_id", idNum);
+    console.log('[RESULT] round_placements', placementsData);
     if (solvesData) {
       placements = placementsData || [];
       groupedSolves = groupSolvesByCompetitionEventRound(solvesData, placements);
@@ -35,12 +42,13 @@ export default async function Page({ params }: { params: any }) {
       for (const comp of groupedSolves) {
         for (const event of comp.events) {
           const lastRound = event.rounds[event.rounds.length - 1];
-          if (lastRound && [1,2,3].includes(lastRound.placement)) {
+          const placement = lastRound?.placement;
+          if (typeof placement === "number" && [1, 2, 3].includes(placement)) {
             podiumList.push({
               competition_id: comp.competition_id,
               event_code: event.event_code,
               round_number: lastRound.round_number,
-              placement: lastRound.placement
+              placement
             });
           }
         }

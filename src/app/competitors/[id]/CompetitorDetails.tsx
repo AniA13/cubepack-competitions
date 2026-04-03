@@ -6,11 +6,12 @@ interface Competitor {
   name: string;
 }
 
+import { GroupedCompetition, Placement, Podium } from "../../../types/competition";
 interface CompetitorDetailsProps {
   competitor: Competitor | null;
-  groupedSolves: any[];
-  placements: any[];
-  podiums: any[];
+  groupedSolves: GroupedCompetition[];
+  placements: Placement[];
+  podiums: Podium[];
 }
 
 export default function CompetitorDetails({ competitor, groupedSolves, placements, podiums }: CompetitorDetailsProps) {
@@ -22,7 +23,7 @@ export default function CompetitorDetails({ competitor, groupedSolves, placement
 
   // List of all event codes to show as selectors
   const allEventCodes = Array.from(
-    new Set(groupedSolves.flatMap((c) => c.events.map((e) => e.event_code)))
+    new Set(groupedSolves.flatMap((c) => c.events.map((e: any) => e.event_code)))
   );
   // Event code to WCA icon class and label
   const eventMeta: Record<string, { icon: string; label: string }> = {
@@ -52,45 +53,51 @@ export default function CompetitorDetails({ competitor, groupedSolves, placement
               <thead>
                 <tr className="bg-[var(--acid-white-25)] text-black">
                   <th className="border px-2 py-1">Event</th>
-                  <th className="border px-2 py-1">CPR (single)</th>
-                  <th className="border px-2 py-1">Single</th>
+                  <th className="border px-2 py-1">Single Rank</th>
+                  <th className="border px-2 py-1">Best Single</th>
                   <th className="border px-2 py-1">Average</th>
-                  <th className="border px-2 py-1">CPR (average)</th>
+                  <th className="border px-2 py-1">Average Rank</th>
                 </tr>
               </thead>
               <tbody>
                 {allEventCodes.map((code) => {
                   // Gather all rounds for this event across all competitions
                   const allRounds = groupedSolves.flatMap((competition) => {
-                    const event = competition.events.find((e) => e.event_code === code);
+                    const event = competition.events.find((e: any) => e.event_code === code);
                     return event ? event.rounds : [];
                   });
                   // Best single: lowest non-DNF (time_seconds >= 0)
-                  let bestSingle = null;
-                  let bestAverage = null;
+                  let bestSingle: any = null;
+                  let bestSingleSolve: any = null;
                   const singles = allRounds
                     .flatMap(r => r.solves)
-                    .filter(s => !s.is_dnf && typeof s.time_seconds === "number" && s.time_seconds >= 0);
+                    .filter((s): s is typeof s & { time_seconds: number } => !s.is_dnf && typeof s.time_seconds === "number" && s.time_seconds >= 0);
                   if (singles.length > 0) {
                     bestSingle = Math.min(...singles.map(s => s.time_seconds));
+                    bestSingleSolve = singles.find(s => s.time_seconds === bestSingle);
                   }
-                  // Best average: lowest valid average (number and >= 0)
-                  const averages = allRounds
-                    .map(r => typeof r.average === "number" && r.average >= 0 ? r.average : null)
-                    .filter(a => a !== null);
-                  if (averages.length > 0) {
-                    bestAverage = Math.min(...averages);
-                  }
+
+                  // Best average and its solve_rank: use round_placements only
+                  const eventPlacements = placements.filter(
+                    (p): p is typeof p & { average: number } =>
+                      p.event_code === code && typeof p.average === "number" && p.average >= 0
+                  );
+                  const bestAverageObj = eventPlacements.length > 0
+                    ? eventPlacements.reduce((min, p) => p.average < min.average ? p : min, eventPlacements[0])
+                    : null;
+                  const bestAverage = bestAverageObj ? bestAverageObj.average : null;
+                  const bestAverageRank = bestAverageObj ? bestAverageObj.solve_rank : "";
+
                   return (
                     <tr key={code}>
                       <td className="border px-2 py-1 flex items-center gap-2">
                         <i className={`cubing-icon icon ${eventMeta[code]?.icon || code}`}></i>
                         {eventMeta[code]?.label || code}
                       </td>
-                      <td className="border px-2 py-1">CPR</td>
+                      <td className="border px-2 py-1">{bestSingleSolve && typeof bestSingleSolve.solve_rank !== "undefined" ? bestSingleSolve.solve_rank : ""}</td>
                       <td className="border px-2 py-1">{bestSingle !== null ? bestSingle.toFixed(2) : "DNF"}</td>
                       <td className="border px-2 py-1">{bestAverage !== null ? bestAverage.toFixed(2) : "DNF"}</td>
-                      <td className="border px-2 py-1">CPR</td>
+                      <td className="border px-2 py-1">{bestAverageRank}</td>
                     </tr>
                   );
                 })}
@@ -153,9 +160,9 @@ export default function CompetitorDetails({ competitor, groupedSolves, placement
                 {/* CPR columns will be filled in future. */}
                 {/* For each competition, for the selected event, show all rounds */}
                 {groupedSolves.map((competition) => {
-                  const event = competition.events.find((e) => e.event_code === selectedEvent);
+                  const event = competition.events.find((e: any) => e.event_code === selectedEvent);
                   if (!event) return null;
-                  return event.rounds.map((round, idx) => (
+                  return event.rounds.map((round: any, idx: any) => (
                     <tr className="result" key={competition.competition_id + "-" + round.round_number}>
                       <td className="border px-2 py-1 align-middle">
                         {idx === 0 ? (
@@ -168,8 +175,22 @@ export default function CompetitorDetails({ competitor, groupedSolves, placement
                       </td>
                       <td className="border px-2 py-1 align-middle">{typeof round.bestSingle === "number" ? round.bestSingle.toFixed(2) : round.bestSingle}</td>
                       <td className="border px-2 py-1 align-middle">{typeof round.average === "number" ? round.average.toFixed(2) : round.average}</td>
-                      <td className="border px-2 py-1 align-middle">CPR Single</td>
-                      <td className="border px-2 py-1 align-middle">CPR Average</td>
+                      {/* CPR Single: only for the best single solve in this event/round */}
+                      <td className="border px-2 py-1 align-middle">
+                        {(() => {
+                          // Find the best single for this event in this competition
+                          const allRounds = competition.events.find((e: any) => e.event_code === selectedEvent)?.rounds || [];
+                           const singles = allRounds
+                             .flatMap((r: any) => r.solves)
+                             .filter((s: any): s is typeof s & { time_seconds: number } => !s.is_dnf && typeof s.time_seconds === "number" && s.time_seconds >= 0);
+                          if (singles.length === 0) return "";
+                           const bestSingle = Math.min(...singles.map((s) => s.time_seconds));
+                          // If this round contains the best single, mark CPR for that solve
+                           const isBestSingle = round.solves.some((s: any) => s.time_seconds === bestSingle && !s.is_dnf);
+                          return isBestSingle ? "CPR" : "";
+                        })()}
+                      </td>
+                      <td className="border px-2 py-1 align-middle"></td>
                       {/* Solves */}
                       {Array.from({ length: 5 }).map((_, i) => {
                         const solve = round.solves[i];
