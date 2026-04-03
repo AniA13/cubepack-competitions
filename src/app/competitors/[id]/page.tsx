@@ -1,10 +1,53 @@
-"use client";
-
 import CompetitorDetails from "./CompetitorDetails";
 import Navbar from "../../..//components/navbar";
+import { createClient } from "@supabase/supabase-js";
+import { groupSolvesByCompetitionEventRound } from "../../../utils/groupSolves";
 
-export default async function Page({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+export default async function Page({ params }: { params: any }) {
+  // Handle both Promise and object for params
+  let realParams = params;
+  if (typeof params?.then === "function") {
+    realParams = await params;
+  }
+  const id = realParams.id;
+  const idNum = Number(id);
+  let competitor = null;
+  let groupedSolves = [];
+  let placements = [];
+  let podiums = [];
+  if (!isNaN(idNum)) {
+    // Fetch competitor
+    const { data: competitorData, error: competitorError } = await supabase.from("competitors").select("*").eq("id", idNum).single();
+    competitor = competitorData ?? null;
+    // Fetch solves
+    const { data: solvesData } = await supabase.from("solves").select("*").eq("competitor_id", idNum);
+    // Fetch placements
+    const { data: placementsData } = await supabase.from("round_placements").select("*").eq("competitor_id", idNum);
+    if (solvesData) {
+      placements = placementsData || [];
+      groupedSolves = groupSolvesByCompetitionEventRound(solvesData, placements);
+      // Find podiums (placement 1,2,3 in last round of event in competition)
+      const podiumList = [];
+      for (const comp of groupedSolves) {
+        for (const event of comp.events) {
+          const lastRound = event.rounds[event.rounds.length - 1];
+          if (lastRound && [1,2,3].includes(lastRound.placement)) {
+            podiumList.push({
+              competition_id: comp.competition_id,
+              event_code: event.event_code,
+              round_number: lastRound.round_number,
+              placement: lastRound.placement
+            });
+          }
+        }
+      }
+      podiums = podiumList;
+    }
+  }
   return (
     <main className="min-h-screen px-6 py-8">
       <div className="mx-auto w-full max-w-6xl">
@@ -12,7 +55,12 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       </div>
       <div className="mx-auto w-full max-w-4xl">
         <h1 className="text-3xl font-bold mb-8 text-center text-[var(--acid-white-0)]">Competitor Details</h1>
-        <CompetitorDetails id={id} />
+        <CompetitorDetails
+          competitor={competitor}
+          groupedSolves={groupedSolves}
+          placements={placements}
+          podiums={podiums}
+        />
       </div>
     </main>
   );

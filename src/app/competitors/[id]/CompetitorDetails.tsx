@@ -1,104 +1,21 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
-import { groupSolvesByCompetitionEventRound } from "../../../utils/groupSolves";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+import React, { useState } from "react";
 
 interface Competitor {
   id: number;
   name: string;
 }
 
-export default function CompetitorDetails({ id }: { id: string }) {
-  const [competitor, setCompetitor] = useState<Competitor | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [groupedSolves, setGroupedSolves] = useState<any[]>([]);
-  const [solvesLoading, setSolvesLoading] = useState(true);
+interface CompetitorDetailsProps {
+  competitor: Competitor | null;
+  groupedSolves: any[];
+  placements: any[];
+  podiums: any[];
+}
+
+export default function CompetitorDetails({ competitor, groupedSolves, placements, podiums }: CompetitorDetailsProps) {
   const [selectedEvent, setSelectedEvent] = useState<string>("333");
-  const [placements, setPlacements] = useState<any[]>([]);
-  const [podiums, setPodiums] = useState<any[]>([]);
 
-  useEffect(() => {
-    async function fetchCompetitor() {
-      const idNum = Number(id);
-      if (isNaN(idNum)) {
-        setCompetitor(null);
-        setLoading(false);
-        return;
-      }
-      const { data } = await supabase.from("competitors").select("*").eq("id", idNum).single();
-      setCompetitor(data ?? null);
-      setLoading(false);
-    }
-    fetchCompetitor();
-  }, [id]);
-
-  useEffect(() => {
-    async function fetchSolvesAndPlacements() {
-      setSolvesLoading(true);
-      const idNum = Number(id);
-      if (isNaN(idNum)) {
-        setGroupedSolves([]);
-        setPlacements([]);
-        setPodiums([]);
-        setSolvesLoading(false);
-        return;
-      }
-      // Fetch solves
-      const { data: solvesData, error: solvesError } = await supabase.from("solves").select("*").eq("competitor_id", idNum);
-      // Fetch placements
-      const { data: placementsData, error: placementsError } = await supabase.from("round_placements").select("*").eq("competitor_id", idNum);
-      if (solvesError) {
-        console.error("Error fetching solves:", solvesError);
-        setGroupedSolves([]);
-      } else {
-        const grouped = groupSolvesByCompetitionEventRound(solvesData || []);
-        // Merge placements into grouped structure
-        if (placementsData) {
-          setPlacements(placementsData);
-          // Add placement to each round
-          for (const comp of grouped) {
-            for (const event of comp.events) {
-              for (const round of event.rounds) {
-                const placement = placementsData.find(
-                  (p) => p.competition_id === comp.competition_id &&
-                        p.event_code === event.event_code &&
-                        p.round_number === round.round_number
-                );
-                round.placement = placement ? placement.placement : null;
-              }
-            }
-          }
-          // Find podiums (placement 1,2,3 in last round of event in competition)
-          const podiumList = [];
-          for (const comp of grouped) {
-            for (const event of comp.events) {
-              const lastRound = event.rounds[event.rounds.length - 1];
-              if (lastRound && [1,2,3].includes(lastRound.placement)) {
-                podiumList.push({
-                  competition_id: comp.competition_id,
-                  event_code: event.event_code,
-                  round_number: lastRound.round_number,
-                  placement: lastRound.placement
-                });
-              }
-            }
-          }
-          setPodiums(podiumList);
-        }
-        setGroupedSolves(grouped);
-      }
-      setSolvesLoading(false);
-    }
-    fetchSolvesAndPlacements();
-  }, [id]);
-
-  if (loading) {
-    return <div className="text-center text-lg text-[var(--acid-white-75)]">Loading...</div>;
-  }
   if (!competitor) {
     return <div className="text-center text-lg text-[var(--acid-red-75)]">User not found</div>;
   }
@@ -119,8 +36,6 @@ export default function CompetitorDetails({ id }: { id: string }) {
     "pyram": { icon: "event-pyram", label: "Pyraminx" },
     "skewb": { icon: "event-skewb", label: "Skewb" },
     "sq1": { icon: "event-sq1", label: "Square-1" },
-    
-    
   };
 
   return (
@@ -218,9 +133,7 @@ export default function CompetitorDetails({ id }: { id: string }) {
         </div>
         {/* Table */}
         <div className="table-responsive overflow-x-auto">
-          {solvesLoading ? (
-            <div className="text-center text-[var(--acid-white-75)]">Loading solves...</div>
-          ) : groupedSolves.length === 0 ? (
+          {groupedSolves.length === 0 ? (
             <div className="text-center text-[var(--acid-red-75)]">No solves found.</div>
           ) : (
             <table className="min-w-[800px] w-full border text-sm table-auto">

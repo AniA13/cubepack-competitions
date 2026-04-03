@@ -12,25 +12,30 @@ function computeBestSingle(solves) {
 // Helper: compute WCA average (remove best/worst, average the rest; 2+ DNFs = DNF)
 function computeWcaAverage(solves) {
   if (!Array.isArray(solves) || solves.length < 3) return "";
-  const times = solves.map((s) => (s.is_dnf ? null : s.time_seconds));
+  const times = solves.map((s) => (s.is_dnf || typeof s.time_seconds !== "number" || s.time_seconds < 0 ? null : s.time_seconds));
   const dnfCount = times.filter((t) => t === null).length;
-  if (dnfCount >= 2) return "DNF"; // WCA: 2+ DNFs = DNF average
-  // Remove best and worst (DNF is always worst)
-  let bestIdx = -1, worstIdx = -1;
-  let min = Infinity, max = -Infinity;
-  for (let i = 0; i < times.length; ++i) {
-    if (times[i] !== null && times[i] < min) { min = times[i]; bestIdx = i; }
-    if (times[i] !== null && times[i] > max) { max = times[i]; worstIdx = i; }
-    if (times[i] === null) worstIdx = i; // DNF is always worst
+  if (solves.length === 5) {
+    if (dnfCount >= 2) return "DNF";
+    // Remove best and worst valid (DNF is always worst)
+    const valid = times.filter((t) => t !== null);
+    if (valid.length < 3) return "DNF";
+    const validSorted = [...valid].sort((a, b) => a - b);
+    // Remove best and worst
+    const toAverage = validSorted.slice(1, -1);
+    if (toAverage.length !== 3) return "DNF";
+    return toAverage.reduce((a, b) => a + b, 0) / 3;
   }
-  // Remove best and worst
-  const toAverage = times.filter((_, i) => i !== bestIdx && i !== worstIdx && times[i] !== null);
-  if (toAverage.length === 0) return "";
-  const avg = toAverage.reduce((a, b) => a + b, 0) / toAverage.length;
-  return avg;
+  if (solves.length === 3) {
+    if (dnfCount > 0) return "DNF";
+    return times.reduce((a, b) => a + b, 0) / 3;
+  }
+  // For other cases: mean of valid, DNF if none
+  const valid = times.filter((t) => t !== null);
+  if (valid.length > 0) return valid.reduce((a, b) => a + b, 0) / valid.length;
+  return "DNF";
 }
 
-export function groupSolvesByCompetitionEventRound(solves) {
+export function groupSolvesByCompetitionEventRound(solves, placements = []) {
   // Group by competition_id
   const competitionsMap = new Map();
   for (const solve of solves) {
@@ -47,6 +52,14 @@ export function groupSolvesByCompetitionEventRound(solves) {
     }
     roundsMap.get(solve.round_number).push(solve);
   }
+  // Helper to find placement for a round
+  function findPlacement(competition_id, event_code, round_number) {
+    return placements.find(
+      (p) => p.competition_id === competition_id &&
+             p.event_code === event_code &&
+             p.round_number === round_number
+    );
+  }
   // Convert to array structure, sorted by competition_id, event_code, round_number
   const competitions = Array.from(competitionsMap.entries())
     .sort((a, b) => a[0] - b[0])
@@ -60,11 +73,13 @@ export function groupSolvesByCompetitionEventRound(solves) {
             .sort((a, b) => a[0] - b[0])
             .map(([round_number, solves]) => {
               const sortedSolves = solves.sort((a, b) => a.solve_number - b.solve_number);
+              const placement = findPlacement(competition_id, event_code, round_number);
               return {
                 round_number,
                 solves: sortedSolves,
-                bestSingle: computeBestSingle(sortedSolves),
-                average: computeWcaAverage(sortedSolves),
+                bestSingle: placement && typeof placement.best_single === "number" ? placement.best_single : computeBestSingle(sortedSolves),
+                average: placement && typeof placement.average === "number" ? placement.average : computeWcaAverage(sortedSolves),
+                placement: placement ? placement.placement : null,
               };
             }),
         })),
